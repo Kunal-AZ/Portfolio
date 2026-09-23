@@ -1,0 +1,70 @@
+export const skillsData = [
+  {
+    name: "MERN Stack",
+    category: "Full-Stack",
+    badge: "Core Stack",
+    description: "End-to-end full-stack development using MongoDB, Express.js, React.js, and Node.js for scalable web applications.",
+    highlight: true,
+  },
+  {
+    name: "React.js",
+    category: "Frontend",
+    badge: "Frontend Framework",
+    description: "Modern single-page applications, functional components, custom hooks, and state management.",
+  },
+  {
+    name: "JavaScript (ES6+)",
+    category: "Core Language",
+    badge: "Language",
+    description: "Asynchronous programming, promises, async/await, DOM manipulation, and modern ES6+ patterns.",
+  },
+  {
+    name: "Java",
+    category: "Core Language",
+    badge: "Language",
+    description: "Object-oriented programming (OOP), data structures, algorithms, and core engineering fundamentals.",
+  },
+  {
+    name: "Node.js & Express.js",
+    category: "Backend",
+    badge: "Backend Runtime",
+    description: "RESTful API development, asynchronous request pipelines, middleware integration, and JWT authentication.",
+  },
+  {
+    name: "MongoDB",
+    category: "Database",
+    badge: "NoSQL Database",
+    description: "Document data modeling, schema creation with Mongoose, and persistence for web applications.",
+  },
+  {
+    name: "SQL & MySQL",
+    category: "Database",
+    badge: "Relational DB",
+    description: "Relational database schema design, SQL queries, table joins, and constraints (Oracle Certified).",
+  },
+  {
+    name: "HTML5 & CSS3",
+    category: "Frontend",
+    badge: "Web Foundations",
+    description: "Semantic layouts, responsive web design, accessibility (a11y), and cross-browser styling.",
+  },
+  {
+    name: "Tailwind CSS",
+    category: "Frontend",
+    badge: "Styling",
+    description: "Modern utility-first CSS framework for crafting responsive, polished, dark-theme user interfaces.",
+  },
+  {
+    name: "Git & GitHub",
+    category: "DevOps & Tools",
+    badge: "Version Control",
+    description: "Branching strategies, collaborative version control, pull requests, and repository management.",
+  },
+  {
+    name: "AI & Machine Learning Basics",
+    category: "Active Learning",
+    badge: "Still Learning",
+    description: "Currently exploring foundational machine learning algorithms, OpenCV computer vision, and AI basics.",
+    isLearning: true,
+  },
+];

@@ -1,0 +1,28 @@
+{
+  "name": "kunal-sharma-portfolio",
+  "version": "1.0.0",
+  "description": "Production-ready MERN personal portfolio for Kunal Sharma - Software Engineer | MERN & AI Systems",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build",
+    "install:all": "npm install && npm --prefix client install && npm --prefix server install",
+    "start": "npm --prefix server start"
+  },
+  "keywords": [
+    "portfolio",
+    "mern",
+    "react",
+    "express",
+    "mongodb",
+    "ai",
+    "llm",
+    "multi-agent"
+  ],
+  "author": "Kunal Sharma",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
