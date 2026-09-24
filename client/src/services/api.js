@@ -74,14 +74,14 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   }
 }
 
-// Web3Forms Access Key for instant HTTPS email delivery to kunalsharma9637@gmail.com
-const WEB3FORMS_ACCESS_KEY =
-  import.meta.env.VITE_WEB3FORMS_ACCESS_KEY ||
-  "7e8198f6-2bb1-4a98-b42b-c2a5b7687b4d";
+// Formspree Endpoint for instant HTTPS email delivery to kunalsharma9637@gmail.com
+const FORMSPREE_ENDPOINT =
+  import.meta.env.VITE_FORMSPREE_ENDPOINT ||
+  "https://formspree.io/f/mgavyjbp";
 
 /**
  * Submit contact form payload:
- * 1. Delivers instant email to Kunal via Web3Forms over HTTPS (Port 443, immune to SMTP blocking)
+ * 1. Delivers instant email to Kunal via Formspree over HTTPS (Port 443, 0 Cloudflare challenges, < 800ms)
  * 2. Concurrently stores message into MongoDB Atlas via Node/Express backend
  */
 export async function sendContactMessage(formData) {
@@ -114,10 +114,10 @@ export async function sendContactMessage(formData) {
 
   const dbPromise = saveToDatabase();
 
-  // 2. Deliver email notification immediately via Web3Forms HTTPS API (< 1.5s)
+  // 2. Deliver email notification immediately via Formspree HTTPS API (< 1s)
   try {
-    const web3Response = await fetchWithTimeout(
-      "https://api.web3forms.com/submit",
+    const formspreeResponse = await fetchWithTimeout(
+      FORMSPREE_ENDPOINT,
       {
         method: "POST",
         headers: {
@@ -125,34 +125,34 @@ export async function sendContactMessage(formData) {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          access_key: WEB3FORMS_ACCESS_KEY,
           name: formData.name,
           email: formData.email,
+          _replyto: formData.email,
           subject: formData.subject || `Inquiry from ${formData.name}`,
+          _subject: `📬 Portfolio Contact: ${formData.subject || "New Inquiry"} (${formData.name})`,
           message: formData.message,
-          from_name: `${formData.name} (Portfolio Inquiry)`,
         }),
       },
       7000
     );
 
-    const web3Data = await web3Response.json().catch(() => null);
+    const formspreeData = await formspreeResponse.json().catch(() => null);
 
-    if (web3Data && web3Data.success) {
-      // Ensure DB save has a moment to settle without blocking UI
+    if (formspreeResponse.ok && (formspreeData?.ok || formspreeData?.next)) {
+      // Ensure DB save has a moment to settle in parallel without blocking user
       await dbPromise.catch(() => {});
       return {
         success: true,
         message:
           "Thank you! Your message has been sent directly to Kunal's inbox and recorded.",
-        data: web3Data,
+        data: formspreeData,
       };
     }
-  } catch (web3Err) {
-    console.warn("Web3Forms HTTPS delivery notice, falling back to backend:", web3Err);
+  } catch (formspreeErr) {
+    console.warn("Formspree delivery notice, falling back to database:", formspreeErr);
   }
 
-  // 3. Fallback: If Web3Forms had a client network glitch, return backend status
+  // 3. Fallback: If Formspree had a client network glitch, return backend status
   const dbResult = await dbPromise;
   if (dbResult && dbResult.success) {
     return {
