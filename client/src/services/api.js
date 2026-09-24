@@ -1,65 +1,114 @@
 import { projectsData } from "../data/projects";
 
-// In production on Vercel/Render, VITE_API_URL can point to the backend URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+// In production, VITE_API_URL points to the deployed backend URL (e.g. Render)
+const CONFIGURED_API_URL = import.meta.env.VITE_API_URL || "";
 
 /**
- * Submit contact form payload to backend
+ * Determine candidate API endpoints to try (proxy first, then direct local fallback)
+ */
+const getCandidateUrls = (endpoint) => {
+  if (CONFIGURED_API_URL) {
+    return [`${CONFIGURED_API_URL}${endpoint}`];
+  }
+
+  // Local development candidates:
+  const isLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+
+  if (isLocal) {
+    return [
+      endpoint, // Vite proxy (/api/contact)
+      `http://127.0.0.1:5000${endpoint}`, // Direct IPv4
+      `http://localhost:5000${endpoint}`, // Direct localhost
+    ];
+  }
+
+  return [endpoint];
+};
+
+/**
+ * Submit contact form payload to backend with automatic fallback
  */
 export async function sendContactMessage(formData) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/contact`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(formData),
-    });
+  const candidateUrls = getCandidateUrls("/api/contact");
+  let lastError = null;
 
-    const data = await response.json();
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    if (!response.ok) {
-      throw new Error(data.message || `Request failed with status ${response.status}`);
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message:
+            data?.message ||
+            `Request failed with status ${response.status}. Please check your inputs.`,
+        };
+      }
+
+      return { success: true, data };
+    } catch (err) {
+      lastError = err;
+      // Try next candidate URL in list
+      continue;
     }
-
-    return { success: true, data };
-  } catch (error) {
-    console.error("API sendContactMessage error:", error);
-    return {
-      success: false,
-      message:
-        error.message ||
-        "Unable to send message right now. Please verify your connection or try again later.",
-    };
   }
+
+  console.error("sendContactMessage failed across all candidates:", lastError);
+  return {
+    success: false,
+    message:
+      "Unable to connect to the backend server. Please make sure your backend is running by running 'npm run dev' in your terminal.",
+  };
 }
 
 /**
  * Fetch projects from API with resilient local fallback
  */
 export async function getProjects() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/projects`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch projects from API");
+  const candidateUrls = getCandidateUrls("/api/projects");
+
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const result = await response.json();
+        if (result?.data) return result.data;
+      }
+    } catch {
+      continue;
     }
-    const result = await response.json();
-    return result.data || projectsData;
-  } catch (error) {
-    console.warn("Using offline/fallback projects data:", error.message);
-    return projectsData;
   }
+
+  return projectsData;
 }
 
 /**
  * Check backend health status
  */
 export async function checkServerHealth() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
-    if (!response.ok) throw new Error("Health check failed");
-    return await response.json();
-  } catch (error) {
-    return { success: false, status: "offline", error: error.message };
+  const candidateUrls = getCandidateUrls("/api/health");
+
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch {
+      continue;
+    }
   }
+
+  return { success: false, status: "offline" };
 }
