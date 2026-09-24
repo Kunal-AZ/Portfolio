@@ -74,51 +74,99 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   }
 }
 
+// Web3Forms Access Key for instant HTTPS email delivery to kunalsharma9637@gmail.com
+const WEB3FORMS_ACCESS_KEY =
+  import.meta.env.VITE_WEB3FORMS_ACCESS_KEY ||
+  "7e8198f6-2bb1-4a98-b42b-c2a5b7687b4d";
+
 /**
- * Submit contact form payload to backend with automatic multi-route fallback & timeout
+ * Submit contact form payload:
+ * 1. Delivers instant email to Kunal via Web3Forms over HTTPS (Port 443, immune to SMTP blocking)
+ * 2. Concurrently stores message into MongoDB Atlas via Node/Express backend
  */
 export async function sendContactMessage(formData) {
+  // 1. Parallel database save to MongoDB Atlas via backend
   const candidateUrls = getCandidateUrls("/api/contact");
-  let lastError = null;
-
-  for (const url of candidateUrls) {
-    try {
-      const response = await fetchWithTimeout(
-        url,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
+  const saveToDatabase = async () => {
+    for (const url of candidateUrls) {
+      try {
+        const response = await fetchWithTimeout(
+          url,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify(formData),
           },
-          body: JSON.stringify(formData),
-        },
-        7000 // 7-second max timeout per candidate
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        return {
-          success: false,
-          message:
-            data?.message ||
-            `Request failed with status ${response.status}. Please check your inputs.`,
-        };
+          6000
+        );
+        if (response.ok) {
+          return await response.json().catch(() => null);
+        }
+      } catch {
+        continue;
       }
-
-      return { success: true, data };
-    } catch (err) {
-      lastError = err;
-      continue;
     }
+    return null;
+  };
+
+  const dbPromise = saveToDatabase();
+
+  // 2. Deliver email notification immediately via Web3Forms HTTPS API (< 1.5s)
+  try {
+    const web3Response = await fetchWithTimeout(
+      "https://api.web3forms.com/submit",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          name: formData.name,
+          email: formData.email,
+          subject: formData.subject || `Inquiry from ${formData.name}`,
+          message: formData.message,
+          from_name: `${formData.name} (Portfolio Inquiry)`,
+        }),
+      },
+      7000
+    );
+
+    const web3Data = await web3Response.json().catch(() => null);
+
+    if (web3Data && web3Data.success) {
+      // Ensure DB save has a moment to settle without blocking UI
+      await dbPromise.catch(() => {});
+      return {
+        success: true,
+        message:
+          "Thank you! Your message has been sent directly to Kunal's inbox and recorded.",
+        data: web3Data,
+      };
+    }
+  } catch (web3Err) {
+    console.warn("Web3Forms HTTPS delivery notice, falling back to backend:", web3Err);
   }
 
-  console.error("sendContactMessage failed across all candidates:", lastError);
+  // 3. Fallback: If Web3Forms had a client network glitch, return backend status
+  const dbResult = await dbPromise;
+  if (dbResult && dbResult.success) {
+    return {
+      success: true,
+      message:
+        "Thank you! Your message has been received and saved. Kunal will get back to you shortly.",
+      data: dbResult,
+    };
+  }
+
   return {
     success: false,
     message:
-      "Unable to send message right now. If your backend is sleeping, please try once more in a few seconds.",
+      "Unable to send message right now. Please try again or reach out directly at kunalsharma9637@gmail.com.",
   };
 }
 
