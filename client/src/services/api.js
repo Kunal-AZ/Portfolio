@@ -7,7 +7,7 @@ const LIVE_RENDER_API = "https://portfolio-backend-q05y.onrender.com";
 const CONFIGURED_API_URL = import.meta.env.VITE_API_URL || LIVE_RENDER_API;
 
 /**
- * Determine candidate API endpoints with fast timeouts
+ * Determine candidate API endpoints with fast fallbacks
  */
 const getCandidateUrls = (endpoint) => {
   const isLocal =
@@ -17,19 +17,42 @@ const getCandidateUrls = (endpoint) => {
 
   if (isLocal) {
     return [
-      `http://127.0.0.1:5000${endpoint}`, // Direct local backend first (instant)
-      endpoint, // Vite proxy (/api/contact)
-      `${LIVE_RENDER_API}${endpoint}`, // Live Render fallback
+      `http://127.0.0.1:5000${endpoint}`,
+      `http://localhost:5000${endpoint}`,
+      endpoint,
+      `${LIVE_RENDER_API}${endpoint}`,
     ];
   }
 
   // On Vercel / Production:
-  return [
+  // Primary direct Render backend, then relative rewrite endpoint
+  const raw = [
     `${CONFIGURED_API_URL}${endpoint}`,
-    `${LIVE_RENDER_API}${endpoint}`,
     endpoint,
+    `${LIVE_RENDER_API}${endpoint}`,
   ];
+  return [...new Set(raw)];
 };
+
+/**
+ * Pre-warm the backend silently on app mount to avoid Render cold-start latency
+ */
+export function prewarmBackend() {
+  try {
+    fetch(`${LIVE_RENDER_API}/api/health`, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+    }).catch(() => {});
+  } catch {
+    // Ignore pre-warm errors
+  }
+}
+
+// Automatically trigger pre-warm on module load
+if (typeof window !== "undefined") {
+  prewarmBackend();
+}
 
 /**
  * Helper to fetch with a strict timeout (prevents hanging indefinitely)

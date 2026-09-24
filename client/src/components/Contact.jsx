@@ -24,6 +24,7 @@ export default function Contact() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("Transmitting Message...");
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: '' }
 
   const handleChange = (e) => {
@@ -44,10 +45,26 @@ export default function Contact() {
     }
 
     setLoading(true);
+    setLoadingText("Transmitting Message...");
     setStatus(null);
 
-    const result = await sendContactMessage(formData);
-    setLoading(false);
+    // Progressive status updates in case server is waking up from free-tier sleep
+    const timer1 = setTimeout(() => {
+      setLoadingText("Waking up cloud server (free tier)...");
+    }, 2500);
+
+    const timer2 = setTimeout(() => {
+      setLoadingText("Almost there, establishing connection...");
+    }, 7000);
+
+    let result;
+    try {
+      result = await sendContactMessage(formData);
+    } finally {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      setLoading(false);
+    }
 
     if (result.success) {
       setStatus({
@@ -308,8 +325,8 @@ export default function Contact() {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Transmitting Message...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                    <span>{loadingText}</span>
                   </>
                 ) : (
                   <>
