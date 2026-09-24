@@ -1,17 +1,15 @@
 import { projectsData } from "../data/projects";
 
-// In production, VITE_API_URL points to the deployed backend URL (e.g. Render)
-const CONFIGURED_API_URL = import.meta.env.VITE_API_URL || "";
+// Live Render backend URL
+const LIVE_RENDER_API = "https://portfolio-backend-q05y.onrender.com";
+
+// Base URL precedence: Environment Variable -> Live Render URL
+const CONFIGURED_API_URL = import.meta.env.VITE_API_URL || LIVE_RENDER_API;
 
 /**
- * Determine candidate API endpoints to try (proxy first, then direct local fallback)
+ * Determine candidate API endpoints to try (local first, then production Render fallback)
  */
 const getCandidateUrls = (endpoint) => {
-  if (CONFIGURED_API_URL) {
-    return [`${CONFIGURED_API_URL}${endpoint}`];
-  }
-
-  // Local development candidates:
   const isLocal =
     typeof window !== "undefined" &&
     (window.location.hostname === "localhost" ||
@@ -20,16 +18,22 @@ const getCandidateUrls = (endpoint) => {
   if (isLocal) {
     return [
       endpoint, // Vite proxy (/api/contact)
-      `http://127.0.0.1:5000${endpoint}`, // Direct IPv4
+      `http://127.0.0.1:5000${endpoint}`, // Direct local IPv4
       `http://localhost:5000${endpoint}`, // Direct localhost
+      `${LIVE_RENDER_API}${endpoint}`, // Live Render fallback if local server is stopped!
     ];
   }
 
-  return [endpoint];
+  // On Vercel / Production:
+  return [
+    `${CONFIGURED_API_URL}${endpoint}`,
+    `${LIVE_RENDER_API}${endpoint}`,
+    endpoint, // Vercel rewrite fallback
+  ];
 };
 
 /**
- * Submit contact form payload to backend with automatic fallback
+ * Submit contact form payload to backend with automatic multi-route fallback
  */
 export async function sendContactMessage(formData) {
   const candidateUrls = getCandidateUrls("/api/contact");
@@ -41,6 +45,7 @@ export async function sendContactMessage(formData) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify(formData),
       });
@@ -68,7 +73,7 @@ export async function sendContactMessage(formData) {
   return {
     success: false,
     message:
-      "Unable to connect to the backend server. Please make sure your backend is running by running 'npm run dev' in your terminal.",
+      "Unable to connect to the backend server. If using Render free tier, the server may take up to 30 seconds to wake up from idle. Please wait a moment and try again.",
   };
 }
 

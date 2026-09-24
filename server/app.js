@@ -14,27 +14,30 @@ const app = express();
 // Security headers
 app.use(
   helmet({
-    contentSecurityPolicy: false, // Allows flexible client integration
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
-// CORS configuration
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://127.0.0.1:5173",
-  process.env.CLIENT_URL,
-].filter(Boolean);
-
+// Robust CORS allowing Vercel, localhost, and custom domains
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, curl, or same-origin)
-      if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== "production") {
-        callback(null, true);
-      } else {
-        callback(new Error("Blocked by CORS policy"));
+      if (!origin) return callback(null, true);
+
+      const isLocal =
+        origin.includes("localhost") || origin.includes("127.0.0.1");
+      const isVercel =
+        origin.endsWith(".vercel.app") || origin.includes("vercel.app");
+      const isClientUrl =
+        process.env.CLIENT_URL && origin.startsWith(process.env.CLIENT_URL);
+
+      if (isLocal || isVercel || isClientUrl || process.env.NODE_ENV !== "production") {
+        return callback(null, true);
       }
+
+      // Allow by default to prevent blocking real recruiters/visitors
+      return callback(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
@@ -48,8 +51,8 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 // Body parsing with safe size limits
-app.use(express.json({ limit: "15kb" }));
-app.use(express.urlencoded({ extended: true, limit: "15kb" }));
+app.use(express.json({ limit: "25kb" }));
+app.use(express.urlencoded({ extended: true, limit: "25kb" }));
 
 // General Rate Limiting
 app.use("/api", generalLimiter);
@@ -62,7 +65,7 @@ app.use("/api/contact", contactRoutes);
 // Root route
 app.get("/", (req, res) => {
   res.status(200).json({
-    message: "Kunal Sharma Portfolio API is running smoothly.",
+    message: "Kunal Sharma Portfolio API is running smoothly on Render.",
     documentation: {
       health: "/api/health",
       projects: "/api/projects",
