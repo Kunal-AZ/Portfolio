@@ -31,9 +31,7 @@ const submitContact = async (req, res, next) => {
       savedRecord = ContactMessage.saveFallback(payload);
     }
 
-    // Trigger notification service
-    await sendContactNotification(payload);
-
+    // Return instant HTTP 201 response to user (instant UI feedback, < 200ms)
     res.status(201).json({
       success: true,
       message: "Thank you for reaching out, Kunal has received your message and will respond promptly.",
@@ -43,6 +41,13 @@ const submitContact = async (req, res, next) => {
         subject: savedRecord.subject,
         createdAt: savedRecord.createdAt,
       },
+    });
+
+    // Asynchronously dispatch email notification in background (non-blocking)
+    setImmediate(() => {
+      sendContactNotification(payload).catch((err) => {
+        console.error("[Background Email Notification Error]:", err.message);
+      });
     });
   } catch (error) {
     next(error);

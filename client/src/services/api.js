@@ -3,11 +3,11 @@ import { projectsData } from "../data/projects";
 // Live Render backend URL
 const LIVE_RENDER_API = "https://portfolio-backend-q05y.onrender.com";
 
-// Base URL precedence: Environment Variable -> Live Render URL
+// Active API Base URL
 const CONFIGURED_API_URL = import.meta.env.VITE_API_URL || LIVE_RENDER_API;
 
 /**
- * Determine candidate API endpoints to try (local first, then production Render fallback)
+ * Determine candidate API endpoints with fast timeouts
  */
 const getCandidateUrls = (endpoint) => {
   const isLocal =
@@ -17,10 +17,9 @@ const getCandidateUrls = (endpoint) => {
 
   if (isLocal) {
     return [
+      `http://127.0.0.1:5000${endpoint}`, // Direct local backend first (instant)
       endpoint, // Vite proxy (/api/contact)
-      `http://127.0.0.1:5000${endpoint}`, // Direct local IPv4
-      `http://localhost:5000${endpoint}`, // Direct localhost
-      `${LIVE_RENDER_API}${endpoint}`, // Live Render fallback if local server is stopped!
+      `${LIVE_RENDER_API}${endpoint}`, // Live Render fallback
     ];
   }
 
@@ -28,12 +27,32 @@ const getCandidateUrls = (endpoint) => {
   return [
     `${CONFIGURED_API_URL}${endpoint}`,
     `${LIVE_RENDER_API}${endpoint}`,
-    endpoint, // Vercel rewrite fallback
+    endpoint,
   ];
 };
 
 /**
- * Submit contact form payload to backend with automatic multi-route fallback
+ * Helper to fetch with a strict timeout (prevents hanging indefinitely)
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
+/**
+ * Submit contact form payload to backend with automatic multi-route fallback & timeout
  */
 export async function sendContactMessage(formData) {
   const candidateUrls = getCandidateUrls("/api/contact");
@@ -41,14 +60,18 @@ export async function sendContactMessage(formData) {
 
   for (const url of candidateUrls) {
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(formData),
         },
-        body: JSON.stringify(formData),
-      });
+        7000 // 7-second max timeout per candidate
+      );
 
       const data = await response.json().catch(() => null);
 
@@ -64,7 +87,6 @@ export async function sendContactMessage(formData) {
       return { success: true, data };
     } catch (err) {
       lastError = err;
-      // Try next candidate URL in list
       continue;
     }
   }
@@ -73,7 +95,7 @@ export async function sendContactMessage(formData) {
   return {
     success: false,
     message:
-      "Unable to connect to the backend server. If using Render free tier, the server may take up to 30 seconds to wake up from idle. Please wait a moment and try again.",
+      "Unable to send message right now. If your backend is sleeping, please try once more in a few seconds.",
   };
 }
 
@@ -85,7 +107,7 @@ export async function getProjects() {
 
   for (const url of candidateUrls) {
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url, {}, 5000);
       if (response.ok) {
         const result = await response.json();
         if (result?.data) return result.data;
@@ -106,7 +128,7 @@ export async function checkServerHealth() {
 
   for (const url of candidateUrls) {
     try {
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url, {}, 4000);
       if (response.ok) {
         return await response.json();
       }
